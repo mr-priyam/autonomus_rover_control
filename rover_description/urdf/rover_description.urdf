@@ -1,0 +1,79 @@
+<?xml version="1.0"?>
+<robot name="rover">
+
+  <!-- ===================== -->
+  <!-- Base link (robot body) -->
+  <!-- ===================== -->
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.4 0.3 0.15"/>
+      </geometry>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <material name="gray">
+        <color rgba="0.6 0.6 0.6 1.0"/>
+      </material>
+    </visual>
+
+    <collision>
+      <geometry>
+        <box size="0.4 0.3 0.15"/>
+      </geometry>
+    </collision>
+
+    <inertial>
+      <mass value="12.0"/>
+      <origin xyz="0 0 0"/>
+      <inertia
+        ixx="0.25" ixy="0.0" ixz="0.0"
+        iyy="0.30" iyz="0.0"
+        izz="0.35"/>
+    </inertial>
+  </link>
+
+ 
+  <!-- ================= -->
+  <!-- Camera link       -->
+  <!-- ================= -->
+  <link name="camera_link">
+    <visual>
+      <geometry>
+        <box size="0.06 0.04 0.03"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+  
+   <!-- ================= -->
+  <!-- IMU link          -->
+  <!-- ================= -->
+  <link name="imu_link">
+    <visual>
+      <geometry>
+        <box size="0.05 0.05 0.02"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.2 0.2 0.8 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+
+  <joint name="base_to_camera" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <!-- Camera mounting position -->
+    <origin xyz="0.15 0.0 0.25" rpy="0 0 0"/>
+  </joint>
+  
+    <joint name="camera_to_imu" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <!-- IMU mounting position -->
+    <origin xyz="0.0 0.0 0.05" rpy="0 0 0"/>
+  </joint>
+
+
+</robot>
