@@ -21,11 +21,16 @@ class JoyToSerial(Node):
         # ---------- SERIAL ----------
         try:
             self.ser = serial.Serial(port, baud, timeout=0.1)
-            time.sleep(2)  # allow Arduino reset
+            # Short sleep to allow some microcontrollers (like Arduino) to reset
+            time.sleep(2)  
             self.get_logger().info(f'Serial connected: {port} @ {baud}')
         except Exception as e:
             self.get_logger().error(f'Serial connection failed: {e}')
             self.ser = None
+
+        # ---------- BUTTON ORDER ----------
+        # Required order: 4, 0, 3, 1, 6, 7
+        self.button_order = [4, 0, 3, 1, 6, 7]
 
         # ---------- SUBSCRIBER ----------
         self.sub = self.create_subscription(
@@ -36,28 +41,48 @@ class JoyToSerial(Node):
         )
 
     def joy_callback(self, msg: Joy):
-        # Safety check
-        if len(msg.axes) < 4:
-            self.get_logger().warn('Joy message has insufficient axes')
+        # ---------- SAFETY CHECK ----------
+        # Ensure the message actually contains the buttons/axes we expect
+        if len(msg.axes) < 4 or len(msg.buttons) < max(self.button_order) + 1:
             return
 
+        # ---------- AXES ----------
         axis_3 = msg.axes[3]
         axis_1 = msg.axes[1]
 
-        # Format: A3 <val> A1 <val>\n
-        data = f"A3 {axis_3:.3f} A1 {axis_1:.3f}\n"
+        # ---------- BUTTONS (MOMENTARY/LEVEL MODE) ----------
+        # This list comprehension will result in 1 if held, 0 if released.
+        button_values = [msg.buttons[i] for i in self.button_order]
+
+        # ---------- SERIAL FORMAT ----------
+        # Example output: "A3 0.123 A1 -0.456 B 1 0 0 1 0 0\n"
+        btn_str = ' '.join(map(str, button_values))
+        data = f"A3 {axis_3:.3f} A1 {axis_1:.3f} B {btn_str}\n"
 
         if self.ser and self.ser.is_open:
-            self.ser.write(data.encode())
-        else:
-            self.get_logger().warn('Serial not available')
+            try:
+                self.ser.write(data.encode())
+                # Log only when a button is pressed to avoid flooding the terminal
+                #if any(button_values):
+                    #self.get_logger().info(f"Sending: {data.strip()}")
+            except Exception as e:
+                self.get_logger().error(f"Write failed: {e}")
+
+    def destroy_node(self):
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+        super().destroy_node()
 
 def main():
     rclpy.init()
     node = JoyToSerial()
-    rclpy.spin(node)
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()
