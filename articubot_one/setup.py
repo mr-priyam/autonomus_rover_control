@@ -31,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             "4ws_node = articubot_one.4ws_node:main",
+            "arm_control = articubot_one.arm_control:main"
         ],
     },
 )
