@@ -19,22 +19,14 @@
 Servo FL_S, FR_S, RL_S, RR_S;
 
 /* ================== TIMING ================== */
-const unsigned long STEP_PULSE_US = 10;     // 10 µs
-const unsigned long RUN_TIME_MS   = 3000;
-const unsigned long PAUSE_MS      = 1000;
-const unsigned long SERVO_STEP_MS = 20;     // servo speed
-
-/* ================== SERVO STATE ================== */
-int curFL = 90, curFR = 90, curRL = 90, curRR = 90;
-int tgtFL = 90, tgtFR = 90, tgtRL = 90, tgtRR = 90;
-unsigned long lastServoMove = 0;
-
-/* ================== STEPPER STATE ================== */
-unsigned long lastPulse = 0;
-bool pulseState = LOW;
+const unsigned long STEP_PULSE_US = 10;
+const unsigned long MOTOR_RUN_MS  = 2000;
+const unsigned long SERVO_STEP_MS = 20;
 
 /* ================================================= */
 void setup() {
+  Serial.begin(115200);
+
   pinMode(FL_DIR, OUTPUT); pinMode(FL_PUL, OUTPUT);
   pinMode(FR_DIR, OUTPUT); pinMode(FR_PUL, OUTPUT);
   pinMode(RL_DIR, OUTPUT); pinMode(RL_PUL, OUTPUT);
@@ -46,94 +38,123 @@ void setup() {
   RR_S.attach(RR_SERVO);
 
   writeAllServos(90);
+  Serial.println("Motor + Servo Test Ready");
 }
 
 /* ================================================= */
 void loop() {
+  if (!Serial.available()) return;
 
-  /* ===== FORWARD + 135° ===== */
-  setDirection(true);
-  setServoTargets(135);
-  runSteppersWithServoUpdate(RUN_TIME_MS);
-  stopSteppers();
-  delay(PAUSE_MS);
+  int cmd = Serial.parseInt();   // <-- IMPORTANT
 
-  /* ===== BACKWARD + 45° ===== */
-  setDirection(false);
-  setServoTargets(45);
-  runSteppersWithServoUpdate(RUN_TIME_MS);
-  stopSteppers();
-  delay(PAUSE_MS);
-}
+  switch (cmd) {
+    case 1:  runSingleMotor(FL_DIR, FL_PUL, true);  break;
+    case 2:  runSingleMotor(FR_DIR, FR_PUL, false); break;
+    case 3:  runSingleMotor(RL_DIR, RL_PUL, true);  break;
+    case 4:  runSingleMotor(RR_DIR, RR_PUL, false); break;
 
-/* ================== CORE FUNCTIONS ================== */
+    case 5:  servoSequenceAll(); break;
+    case 6:  servoSequenceSingle(FL_S); break;
+    case 7:  servoSequenceSingle(FR_S); break;
+    case 8:  servoSequenceSingle(RL_S); break;
+    case 9:  servoSequenceSingle(RR_S); break;
 
-void runSteppersWithServoUpdate(unsigned long durationMs) {
-  unsigned long startMs = millis();
-  lastPulse = micros();
-
-  while (millis() - startMs < durationMs) {
-    updateSteppers();
-    updateServosStepwise();
+    case 10: runAllMotors(true);  break;   // all forward
+    case 11: runAllMotors(false); break;   // all backward
   }
 }
 
-void updateSteppers() {
-  unsigned long now = micros();
-  if (now - lastPulse >= STEP_PULSE_US) {
-    lastPulse = now;
-    pulseState = !pulseState;
+/* ================== MOTOR FUNCTIONS ================== */
 
-    digitalWrite(FL_PUL, pulseState);
-    digitalWrite(FR_PUL, pulseState);
-    digitalWrite(RL_PUL, pulseState);
-    digitalWrite(RR_PUL, pulseState);
+void runSingleMotor(int dirPin, int pulPin, bool normalDir) {
+  digitalWrite(dirPin, normalDir ? HIGH : LOW);
+
+  unsigned long start = millis();
+  unsigned long lastPulse = micros();
+  bool pulse = LOW;
+
+  while (millis() - start < MOTOR_RUN_MS) {
+    if (micros() - lastPulse >= STEP_PULSE_US) {
+      lastPulse = micros();
+      pulse = !pulse;
+      digitalWrite(pulPin, pulse);
+    }
   }
+  digitalWrite(pulPin, LOW);
 }
 
-void updateServosStepwise() {
-  unsigned long now = millis();
-  if (now - lastServoMove < SERVO_STEP_MS) return;
-  lastServoMove = now;
-
-  stepServo(curFL, tgtFL, FL_S);
-  stepServo(curFR, tgtFR, FR_S);
-  stepServo(curRL, tgtRL, RL_S);
-  stepServo(curRR, tgtRR, RR_S);
-}
-
-/* ================== HELPERS ================== */
-
-void stepServo(int &current, int target, Servo &s) {
-  if (current < target) current++;
-  else if (current > target) current--;
-  s.write(current);
-}
-
-void setServoTargets(int angle) {
-  tgtFL = tgtFR = tgtRL = tgtRR = angle;
-}
-
-void writeAllServos(int angle) {
-  curFL = curFR = curRL = curRR = angle;
-  FL_S.write(angle);
-  FR_S.write(angle);
-  RL_S.write(angle);
-  RR_S.write(angle);
-}
-
-void setDirection(bool forward) {
+void runAllMotors(bool forward) {
+  // Direction
   digitalWrite(FL_DIR, forward ? HIGH : LOW);
   digitalWrite(RL_DIR, forward ? HIGH : LOW);
 
-  // FR & RR reversed
   digitalWrite(FR_DIR, forward ? LOW : HIGH);
   digitalWrite(RR_DIR, forward ? LOW : HIGH);
+
+  unsigned long start = millis();
+  unsigned long lastPulse = micros();
+  bool pulse = LOW;
+
+  while (millis() - start < MOTOR_RUN_MS) {
+    if (micros() - lastPulse >= STEP_PULSE_US) {
+      lastPulse = micros();
+      pulse = !pulse;
+
+      digitalWrite(FL_PUL, pulse);
+      digitalWrite(FR_PUL, pulse);
+      digitalWrite(RL_PUL, pulse);
+      digitalWrite(RR_PUL, pulse);
+    }
+  }
+
+  stopAllMotors();
 }
 
-void stopSteppers() {
+void stopAllMotors() {
   digitalWrite(FL_PUL, LOW);
   digitalWrite(FR_PUL, LOW);
   digitalWrite(RL_PUL, LOW);
   digitalWrite(RR_PUL, LOW);
+}
+
+/* ================== SERVO FUNCTIONS ================== */
+
+void servoSequenceAll() {
+  moveAllServosStepwise(135);
+  moveAllServosStepwise(45);
+  moveAllServosStepwise(90);
+}
+
+void servoSequenceSingle(Servo &s) {
+  moveServoStepwise(s, 135);
+  moveServoStepwise(s, 45);
+  moveServoStepwise(s, 90);
+}
+
+void moveAllServosStepwise(int target) {
+  int cur = FL_S.read();
+  while (cur != target) {
+    cur += (cur < target) ? 1 : -1;
+    FL_S.write(cur);
+    FR_S.write(cur);
+    RL_S.write(cur);
+    RR_S.write(cur);
+    delay(SERVO_STEP_MS);
+  }
+}
+
+void moveServoStepwise(Servo &s, int target) {
+  int cur = s.read();
+  while (cur != target) {
+    cur += (cur < target) ? 1 : -1;
+    s.write(cur);
+    delay(SERVO_STEP_MS);
+  }
+}
+
+void writeAllServos(int angle) {
+  FL_S.write(angle);
+  FR_S.write(angle);
+  RL_S.write(angle);
+  RR_S.write(angle);
 }
