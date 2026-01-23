@@ -12,7 +12,7 @@ class JoyToSerial(Node):
         super().__init__('joy_to_serial')
 
         # ---------- PARAMETERS ----------
-        self.declare_parameter('serial_port', '/dev/ttyUSB0')
+        self.declare_parameter('serial_port', '/dev/ttyACM0')
         self.declare_parameter('baudrate', 115200)
 
         port = self.get_parameter('serial_port').value
@@ -29,8 +29,8 @@ class JoyToSerial(Node):
             self.ser = None
 
         # ---------- BUTTON ORDER ----------
-        # Required order: 4, 0, 3, 1, 6, 7
-        self.button_order = [4, 0, 3, 1, 6, 7]
+        # Required order: 4, 0, 3, 1, 8, 9
+        self.button_order = [4, 0, 3, 1, 8, 9]
 
         # ---------- SUBSCRIBER ----------
         self.sub = self.create_subscription(
@@ -47,24 +47,24 @@ class JoyToSerial(Node):
             return
 
         # ---------- AXES ----------
+        axis_7 = msg.axes[7]
         axis_3 = msg.axes[3]
-        axis_1 = msg.axes[1]
 
         # ---------- BUTTONS (MOMENTARY/LEVEL MODE) ----------
         # This list comprehension will result in 1 if held, 0 if released.
         button_values = [msg.buttons[i] for i in self.button_order]
 
         # ---------- SERIAL FORMAT ----------
-        # Example output: "A3 0.123 A1 -0.456 B 1 0 0 1 0 0\n"
+        # Example output: "A3 0.123 A7 -0.456 B 1 0 0 1 0 0\n"
         btn_str = ' '.join(map(str, button_values))
-        data = f"A3 {axis_3:.3f} A1 {axis_1:.3f} B {btn_str}\n"
+        data = f"A3 {axis_3:.3f} A7 {axis_7:.3f} B {btn_str}\n"
 
         if self.ser and self.ser.is_open:
             try:
                 self.ser.write(data.encode())
                 # Log only when a button is pressed to avoid flooding the terminal
-                #if any(button_values):
-                    #self.get_logger().info(f"Sending: {data.strip()}")
+                self.get_logger().info(f"Sending: {data.strip()}")
+
             except Exception as e:
                 self.get_logger().error(f"Write failed: {e}")
 
