@@ -107,13 +107,13 @@ void loop() {
     case '9':  // Stepper CW
       Serial.println("Stepper CW");
       digitalWrite(DIR3_PIN, HIGH);
-      stepperPulse(200);
+      stepperPulse(5000);
       break;
 
     case '0':  // Stepper CCW
       Serial.println("Stepper CCW");
       digitalWrite(DIR3_PIN, LOW);
-      stepperPulse(200);
+      stepperPulse(5000);
       break;
 
     case 's':
